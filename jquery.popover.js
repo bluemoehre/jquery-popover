@@ -28,6 +28,7 @@
             headline: 'This is a popover',
             text: 'This is the default text for a popover.'
         },
+        escapeContent: true,
         showOnHover: true,
         showOnHoverDelay: 1000,
         animSpeed: 100
