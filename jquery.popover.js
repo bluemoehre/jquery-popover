@@ -126,7 +126,7 @@
         this.init = function(initOpts){
             var attrOptStr = $el.attr('data-'+ PLUGIN_NAME);
             var attrOpts = attrOptStr ? $.parseJSON(attrOptStr) : {};
-            opts = $.extend(opts, defOpts, initOpts, attrOpts);
+            opts = $.extend({}, defOpts, initOpts, attrOpts);
 
             // add event handlers
             $el.on('click.'+ PLUGIN_NAME, function(evt){
@@ -149,14 +149,6 @@
                     }
                 })
 
-        };
-
-        /**
-         * Add new options
-         * @param {Object} callOpts
-         */
-        this.setOpts = function(callOpts){
-            opts = $.extend(opts, callOpts);
         };
 
         /**
@@ -256,7 +248,7 @@
                 instance.init(typeof args[0] == 'object' ? args[0] : typeof args[1] == 'object' ? args[1] : {});
             }
             // Call public function
-            if (instance[args[0]]){
+            if (instance[args[0]] && args[0] != 'init'){
                 instance[args[0]](args[1]);
             }
             // Re-Init plugin on element
