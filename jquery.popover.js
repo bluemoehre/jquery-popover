@@ -22,8 +22,9 @@
      */
     var defOpts = {
         tpl: '<div class="popover"><h6>__headline__</h6><p>__text__</p></div>', // selector, jQuery-Collection or HTML
-        data: {
-            // data to fill the template
+        content: {
+            // - data to fill the template
+            // TODO ... jQuery-Collection, HTML or URL (in these cases the template will be obsolete)
             headline: 'This is a popover',
             text: 'This is the default text for a popover.'
         },
@@ -107,7 +108,7 @@
          */
         function replacePlaceholders(html, data){
             $.each(data, function(placeholder, value){
-                html = html.replace('__'+ placeholder +'__', htmlEncode(value));
+                html = html.replace('__'+ placeholder +'__', opts.escapeContent ? htmlEncode(value) : value);
             });
             return html;
         }
@@ -130,10 +131,10 @@
 
             // add event handlers
             $el.on('click.'+ PLUGIN_NAME, function(evt){
-                    evt.preventDefault();
-                    wasClicked = true;
-                    self.show();
-                })
+                evt.preventDefault();
+                wasClicked = true;
+                self.show();
+            })
                 .on('mouseenter.'+ PLUGIN_NAME, function(){
                     clearTimeout(hideTimeout);
                     showTimeout = setTimeout(function(){
@@ -161,7 +162,7 @@
         };
 
         /**
-         * Show flyout
+         * Show popover
          */
         this.show = function(){
             clearTimeout(showTimeout);
@@ -171,19 +172,19 @@
 
                 var $tpl = $(opts.tpl);
                 if ($tpl.is('script[type="text/template"]')){
-                    $popover = $(replacePlaceholders($tpl[0].innerHTML, opts.data));
+                    $popover = $(replacePlaceholders($tpl[0].innerHTML, opts.content));
                 } else {
-                    $popover = $(replacePlaceholders($tpl[0].outerHTML, opts.data));
+                    $popover = $(replacePlaceholders($tpl[0].outerHTML, opts.content));
                 }
 
                 $popover
                     .on('click.'+ PLUGIN_NAME, function(evt){
                         evt.stopPropagation();
                     })
-                    .on('mouseenter.'+ PLUGIN_NAME, function(evt){
+                    .on('mouseenter.'+ PLUGIN_NAME, function(){
                         clearTimeout(hideTimeout);
                     })
-                    .on('mouseleave.'+ PLUGIN_NAME, function(evt){
+                    .on('mouseleave.'+ PLUGIN_NAME, function(){
                         if (!wasClicked){
                             clearTimeout(showTimeout);
                             hideTimeout = setTimeout(function(){
@@ -241,6 +242,8 @@
 
             // Prevent multiple instances for same element
             var instance = $.data(this, PLUGIN_NAME);
+
+            // Init plugin
             if (!instance){
                 instance = new Plugin(this);
                 $.data(this, PLUGIN_NAME, instance);
@@ -252,12 +255,16 @@
                 instance[args[0]](args[1]);
             }
             // Re-Init plugin on element
-            else if (typeof args[0] === 'object'){
+            else if (instance && typeof args[0] == 'object'){
                 instance.destroy();
                 instance.init(args[0]);
             }
+            // Call public function
+            if (args[0] != 'init' && instance[args[0]]){
+                instance[args[0]](args[1]);
+            }
             // Method unknown
-            else {
+            else if (typeof args[0] == 'string'){
                 $.error("Method '" + args[0] + "' doesn't exist for " + PLUGIN_NAME + " plugin");
             }
 
