@@ -152,34 +152,31 @@
         };
 
         /**
+         * Add new options
+         * @param {Object} callOpts
+         */
+        this.setOpts = function(callOpts){
+            opts = $.extend(opts, callOpts);
+        };
+
+        /**
          * Remove this plugin off the element
          * This function should revert all changes which have been made by this plugin
          */
         this.destroy = function(){
             $doc.off('.' + PLUGIN_NAME);
             $el.find('*').addBack().off('.' + PLUGIN_NAME);
-            $el.removeData(PLUGIN_NAME);
-            $el = null;
         };
 
         /**
          * Show flyout
-         * @param {Object} [callOpts] extend the current option-set for this instance
          */
-        this.show = function(callOpts){
-            opts = $.extend(opts, callOpts);
+        this.show = function(){
             clearTimeout(showTimeout);
 
-            // if we have new settings remove old popover
-            if ($popover && callOpts){
-                $popover.remove();
-                $doc.off('click.'+ PLUGIN_NAME);
-            }
+            // if no popover is present built new one
+            if (!$popover){
 
-            // if we have new settings rebuild popover
-            else if (callOpts) {
-
-                // build new popover
                 var $tpl = $(opts.tpl);
                 if ($tpl.is('script[type="text/template"]')){
                     $popover = $(replacePlaceholders($tpl[0].innerHTML, opts.data));
@@ -187,7 +184,6 @@
                     $popover = $(replacePlaceholders($tpl[0].outerHTML, opts.data));
                 }
 
-                // bind events
                 $popover
                     .on('click.'+ PLUGIN_NAME, function(evt){
                         evt.stopPropagation();
@@ -203,9 +199,10 @@
                             }, opts.showOnHoverDelay);
                         }
                     })
+
             }
 
-            // if flyout is available and is not attached to the dom
+            // if popover is available and is not attached to the dom
             if (!$popover.parent().length){
                 $popover
                     .css({
@@ -255,15 +252,20 @@
             if (!instance){
                 instance = new Plugin(this);
                 $.data(this, PLUGIN_NAME, instance);
-                // init with settings object - handle
+                // init with settings object - care about init
                 instance.init(typeof args[0] == 'object' ? args[0] : typeof args[1] == 'object' ? args[1] : {});
             }
             // Call public function
             if (instance[args[0]]){
                 instance[args[0]](args[1]);
-            } else if (typeof args[0] === 'object' || !args[0]){
+            }
+            // Re-Init plugin on element
+            else if (typeof args[0] === 'object'){
+                instance.destroy();
                 instance.init(args[0]);
-            } else {
+            }
+            // Method unknown
+            else {
                 $.error("Method '" + args[0] + "' doesn't exist for " + PLUGIN_NAME + " plugin");
             }
 
