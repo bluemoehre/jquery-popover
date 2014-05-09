@@ -35,6 +35,12 @@
     };
 
     /**
+     * All instances
+     * @type {Array}
+     */
+    var instances = [];
+
+    /**
      * Extended document
      * @type {jQuery}
      */
@@ -130,12 +136,20 @@
             var attrOpts = attrOptStr ? $.parseJSON(attrOptStr) : {};
             opts = $.extend({}, defOpts, initOpts, attrOpts);
 
+            if ($.inArray(self,instances) < 0){
+                instances.push(self);
+            }
+
             // add event handlers
             $el.on('click.'+ PLUGIN_NAME, function(evt){
-                evt.preventDefault();
-                wasClicked = true;
-                self.show();
-            })
+                    evt.preventDefault();
+                    if ($popover && $popover.parent().length){
+                        self.hide();
+                    } else {
+                        self.show();
+                        wasClicked = true;
+                    }
+                })
                 .on('mouseenter.'+ PLUGIN_NAME, function(){
                     clearTimeout(hideTimeout);
                     showTimeout = setTimeout(function(){
@@ -160,6 +174,10 @@
         this.destroy = function(){
             $doc.off('.' + PLUGIN_NAME);
             $el.find('*').addBack().off('.' + PLUGIN_NAME);
+            var idx = $.inArray(self, instances);
+            if (!idx > -1){
+                instances.splice(idx, 1);
+            }
         };
 
         /**
@@ -169,8 +187,8 @@
             clearTimeout(showTimeout);
 
             // if no popover is present built new one
+            // this should be only done on request and NOT on init
             if (!$popover){
-
                 var $tpl = $(opts.tpl);
                 if ($tpl.is('script[type="text/template"]')){
                     $popover = $(replacePlaceholders($tpl[0].innerHTML, opts.content));
@@ -193,10 +211,15 @@
                             }, opts.showOnHoverDelay);
                         }
                     })
-
             }
 
+            // hide other instances
+            $.each(instances, function(idx,instance){
+                instance == self || instance.hide();
+            });
+
             // if popover is available and is not attached to the dom
+            $popover.stop(true);
             if (!$popover.parent().length){
                 $popover
                     .css({
@@ -206,17 +229,14 @@
                         top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) +'px'
                     })
                     .insertAfter($el)
-                    .css('margin-left', $popover.outerWidth()/2*-1 +'px')
-                    .stop(true)
-                    .fadeTo(opts.animSpeed, 1);
-
-                // delay event binding, so the click event for showing does not trigger close immediately
-                setTimeout(function(){
-                    $doc.one('click.'+ PLUGIN_NAME, function(){
-                        self.hide();
-                    })
-                }, 0);
+                    .css('margin-left', $popover.outerWidth()/2*-1 +'px');
             }
+            $popover.fadeTo(opts.animSpeed, 1);
+
+            // delay event binding, so the click event for showing does not trigger close immediately
+            setTimeout(function(){
+                $doc.one('click.'+ PLUGIN_NAME, self.hide);
+            }, 0);
         };
 
         /**
@@ -224,6 +244,7 @@
          */
         this.hide = function(){
             clearTimeout(hideTimeout);
+            $doc.off('click.'+ PLUGIN_NAME, self.hide);
             wasClicked = false;
             if ($popover){
                 $popover.stop(true).fadeTo(opts.animSpeed, 0, function(){
@@ -250,10 +271,6 @@
                 $.data(this, PLUGIN_NAME, instance);
                 // init with settings object - care about init
                 instance.init(typeof args[0] == 'object' ? args[0] : typeof args[1] == 'object' ? args[1] : {});
-            }
-            // Call public function
-            if (instance[args[0]] && args[0] != 'init'){
-                instance[args[0]](args[1]);
             }
             // Re-Init plugin on element
             else if (instance && typeof args[0] == 'object'){
