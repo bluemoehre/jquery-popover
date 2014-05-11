@@ -52,7 +52,7 @@
      * @param {HTMLElement} el
      * @constructor
      */
-    function Plugin(el)
+    function Plugin(el, args)
     {
         /**
          * The element which was passed to the plugin
@@ -97,31 +97,6 @@
 
 
         /**
-         * Returns an escaped string
-         * Fastest version!
-         * @see http://jsperf.com/htmlencoderegex/25
-         * @param {string} text
-         * @returns {string}
-         */
-        function htmlEncode(text){
-            return document.createElement('div').appendChild(document.createTextNode(text)).parentNode.innerHTML;
-        }
-
-        /**
-         * Returns the current string where all placeholders have been replaced with the given data
-         * @param {string} html
-         * @param {object} data
-         * @returns {string}
-         */
-        function replacePlaceholders(html, data){
-            $.each(data, function(placeholder, value){
-                html = html.replace('__'+ placeholder +'__', opts.escapeContent ? htmlEncode(value) : value);
-            });
-            return html;
-        }
-
-
-        /**
          * Init function for setting up this instance
          * The settings are cascaded in the following order:
          *  - the plugin defaults
@@ -131,7 +106,7 @@
          *
          * @param {Object} initOpts
          */
-        this.init = function(initOpts){
+        function init(initOpts){
             var attrOptStr = $el.attr('data-'+ PLUGIN_NAME);
             var attrOpts = attrOptStr ? $.parseJSON(attrOptStr) : {};
             opts = $.extend({}, defOpts, initOpts, attrOpts);
@@ -164,21 +139,32 @@
                         }, opts.showOnHoverDelay);
                     }
                 })
-
-        };
+        }
 
         /**
-         * Remove this plugin off the element
-         * This function should revert all changes which have been made by this plugin
+         * Returns an escaped string
+         * Fastest version!
+         * @see http://jsperf.com/htmlencoderegex/25
+         * @param {string} text
+         * @returns {string}
          */
-        this.destroy = function(){
-            $doc.off('.' + PLUGIN_NAME);
-            $el.find('*').addBack().off('.' + PLUGIN_NAME);
-            var idx = $.inArray(self, instances);
-            if (!idx > -1){
-                instances.splice(idx, 1);
-            }
-        };
+        function htmlEncode(text){
+            return document.createElement('div').appendChild(document.createTextNode(text)).parentNode.innerHTML;
+        }
+
+        /**
+         * Returns the current string where all placeholders have been replaced with the given data
+         * @param {string} html
+         * @param {object} data
+         * @returns {string}
+         */
+        function replacePlaceholders(html, data){
+            $.each(data, function(placeholder, value){
+                html = html.replace('__'+ placeholder +'__', opts.escapeContent ? htmlEncode(value) : value);
+            });
+            return html;
+        }
+
 
         /**
          * Show popover
@@ -252,6 +238,19 @@
                 });
             }
         }
+
+        /**
+         * Remove this plugin off the element
+         * This function should revert all changes which have been made by this plugin
+         */
+        this.destroy = function(){
+            $el.find('*').addBack().off('.' + PLUGIN_NAME);
+            $el.removeData(PLUGIN_NAME);
+            $el = null;
+        };
+
+
+        init(args);
     }
 
 
@@ -259,35 +258,32 @@
     // Register plugin on jQuery
     $.fn[PLUGIN_NAME] = function(){
         var args = arguments;
+        var $this = this;
+        var ret = $this;
 
-        return this.each(function(){
+        this.each(function(){
 
             // Prevent multiple instances for same element
             var instance = $.data(this, PLUGIN_NAME);
-
-            // Init plugin
             if (!instance){
-                instance = new Plugin(this);
+                instance = new Plugin(this, typeof args[0] == 'object' ? args[0] : {});
                 $.data(this, PLUGIN_NAME, instance);
-                // init with settings object - care about init
-                instance.init(typeof args[0] == 'object' ? args[0] : typeof args[1] == 'object' ? args[1] : {});
             }
-            // Re-Init plugin on element
-            else if (instance && typeof args[0] == 'object'){
-                instance.destroy();
-                instance.init(args[0]);
-            }
+
             // Call public function
-            if (args[0] != 'init' && instance[args[0]]){
-                instance[args[0]](args[1]);
+            // If it returns something, break the loop and return the value
+            else if (typeof args[0] == 'string' && typeof instance[args[0]] == 'function' && args[0] != 'init'){
+                ret = instance[args[0]](args[1]);
+                return typeof ret != 'undefined' ? false : ret = $this;
             }
-            // Method unknown
-            else if (typeof args[0] == 'string'){
+
+            else {
                 $.error("Method '" + args[0] + "' doesn't exist for " + PLUGIN_NAME + " plugin");
             }
 
         });
 
+        return ret;
     };
 
 
