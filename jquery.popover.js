@@ -6,7 +6,7 @@
  */
 
 // use window and document as local variables due to performance improvement
-(function($, win, doc) {
+(function ($, win, doc) {
 
     'use strict';
 
@@ -48,12 +48,55 @@
 
 
     /**
+     * Returns a HTML escaped string
+     * @param {string} text
+     * @returns {string}
+     */
+    function htmlEncode(text) {
+        return document.createElement('div').appendChild(document.createTextNode(text)).parentNode.innerHTML;
+    }
+
+    /**
+     * Returns the given string where all placeholders have been replaced with the given data
+     * @param {string} html
+     * @param {Object} data
+     * @param {Boolean} [escape=true]
+     * @returns {string}
+     */
+    function replacePlaceholders(html, data, escape) {
+        var placeholder;
+        var replacement;
+        escape = escape !== false;
+        for (placeholder in data) {
+            if (data.hasOwnProperty(placeholder)) {
+                placeholder = placeholder.replace(/([.*+?\^=!:${}()|\[\]\/\\])/g, "\\$1"); // escape regex special characters
+                replacement = escape ? htmlEncode(data[placeholder]) : data[placeholder];
+                html = html.replace(new RegExp('__' + placeholder + '__', 'g'), replacement);
+            }
+        }
+        return html;
+    }
+
+    /**
+     * Returns a template's HTML as string.
+     * Templates can be specified by jQuery-Selector or HTML-String.
+     * HTML-Strings will passed through, script templates will be unwrapped, normal elements will be converted to string.
+     * @param {string} tpl
+     * @returns {string}
+     */
+    function getTemplate(tpl) {
+        var $tpl = $(tpl);
+        return $tpl[0][$tpl.is('script[type="text/template"]') ? 'innerHTML' : 'outerHTML'];
+    }
+
+
+    /**
      * Plugin constructor
      * @param {HTMLElement} el
      * @constructor
      */
-    function Plugin(el, args)
-    {
+    function Plugin(el, args) {
+
         /**
          * The element which was passed to the plugin
          * @type {jQuery}
@@ -106,144 +149,113 @@
          *
          * @param {Object} initOpts
          */
-        function init(initOpts){
-            var attrOptStr = $el.attr('data-'+ PLUGIN_NAME);
+        function init(initOpts) {
+            var attrOptStr = $el.attr('data-' + PLUGIN_NAME);
             var attrOpts = attrOptStr ? $.parseJSON(attrOptStr) : {};
             opts = $.extend({}, defOpts, initOpts, attrOpts);
 
-            if ($.inArray(self,instances) < 0){
+            if ($.inArray(self, instances) < 0) {
                 instances.push(self);
             }
 
             // add event handlers
-            $el.on('click.'+ PLUGIN_NAME, function(evt){
+            $el
+                .on('click.' + PLUGIN_NAME, function (evt) {
                     evt.preventDefault();
-                    if ($popover && $popover.parent().length){
+                    if ($popover && $popover.parent().length) {
                         self.hide();
                     } else {
                         self.show();
                         wasClicked = true;
                     }
                 })
-                .on('mouseenter.'+ PLUGIN_NAME, function(){
+                .on('mouseenter.' + PLUGIN_NAME, function () {
                     clearTimeout(hideTimeout);
-                    showTimeout = setTimeout(function(){
+                    showTimeout = setTimeout(function () {
                         self.show();
                     }, opts.showOnHoverDelay);
                 })
-                .on('mouseleave.'+ PLUGIN_NAME, function(){
+                .on('mouseleave.' + PLUGIN_NAME, function () {
                     clearTimeout(showTimeout);
-                    if (!wasClicked){
-                        hideTimeout = setTimeout(function(){
+                    if (!wasClicked) {
+                        hideTimeout = setTimeout(function () {
                             self.hide();
                         }, opts.showOnHoverDelay);
                     }
-                })
-        }
-
-        /**
-         * Returns an escaped string
-         * Fastest version!
-         * @see http://jsperf.com/htmlencoderegex/25
-         * @param {string} text
-         * @returns {string}
-         */
-        function htmlEncode(text){
-            return document.createElement('div').appendChild(document.createTextNode(text)).parentNode.innerHTML;
-        }
-
-        /**
-         * Returns the current string where all placeholders have been replaced with the given data
-         * @param {string} html
-         * @param {object} data
-         * @returns {string}
-         */
-        function replacePlaceholders(html, data){
-            $.each(data, function(placeholder, value){
-                html = html.replace('__'+ placeholder +'__', opts.escapeContent ? htmlEncode(value) : value);
-            });
-            return html;
+                });
         }
 
 
         /**
          * Show popover
          */
-        this.show = function(){
+        this.show = function () {
             clearTimeout(showTimeout);
 
-            // if no popover is present built new one
-            // this should be only done on request and NOT on init
-            if (!$popover){
-                var $tpl = $(opts.tpl);
-                if ($tpl.is('script[type="text/template"]')){
-                    $popover = $(replacePlaceholders($tpl[0].innerHTML, opts.content));
-                } else {
-                    $popover = $(replacePlaceholders($tpl[0].outerHTML, opts.content));
-                }
-
-                $popover
-                    .on('click.'+ PLUGIN_NAME, function(evt){
+            // if no popover is present build new one
+            if (!$popover) {
+                $popover = $(replacePlaceholders(getTemplate(opts.tpl), opts.content))
+                    .on('click.' + PLUGIN_NAME, function (evt) {
                         evt.stopPropagation();
                     })
-                    .on('mouseenter.'+ PLUGIN_NAME, function(){
+                    .on('mouseenter.' + PLUGIN_NAME, function () {
                         clearTimeout(hideTimeout);
                     })
-                    .on('mouseleave.'+ PLUGIN_NAME, function(){
-                        if (!wasClicked){
+                    .on('mouseleave.' + PLUGIN_NAME, function () {
+                        if (!wasClicked) {
                             clearTimeout(showTimeout);
-                            hideTimeout = setTimeout(function(){
+                            hideTimeout = setTimeout(function () {
                                 self.hide();
                             }, opts.showOnHoverDelay);
                         }
-                    })
+                    });
             }
 
             // hide other instances
-            $.each(instances, function(idx,instance){
-                instance == self || instance.hide();
+            $.each(instances, function (idx, instance) {
+                instance === self || instance.hide();
             });
 
             // if popover is available and is not attached to the dom
             $popover.stop(true);
-            if (!$popover.parent().length){
+            if (!$popover.parent().length) {
                 $popover
                     .css({
                         opacity: 0,
                         position: 'absolute',
-                        left: $el.position().left + $el.outerWidth()/2 +'px',
-                        top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) +'px'
+                        left: $el.position().left + $el.outerWidth() / 2 + 'px',
+                        top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) + 'px'
                     })
                     .insertAfter($el)
-                    .css('margin-left', $popover.outerWidth()/2*-1 +'px');
+                    .css('margin-left', $popover.outerWidth() / 2 * -1 + 'px');
             }
             $popover.fadeTo(opts.animSpeed, 1);
 
             // delay event binding, so the click event for showing does not trigger close immediately
-            setTimeout(function(){
-                $doc.one('click.'+ PLUGIN_NAME, self.hide);
+            setTimeout(function () {
+                $doc.one('click.' + PLUGIN_NAME, self.hide);
             }, 0);
         };
 
         /**
          * Hide flyout
          */
-        this.hide = function(){
+        this.hide = function () {
             clearTimeout(hideTimeout);
-            $doc.off('click.'+ PLUGIN_NAME, self.hide);
+            $doc.off('click.' + PLUGIN_NAME, self.hide);
             wasClicked = false;
-            if ($popover){
-                $popover.stop(true).fadeTo(opts.animSpeed, 0, function(){
+            if ($popover) {
+                $popover.stop(true).fadeTo(opts.animSpeed, 0, function () {
                     $popover.detach();
                 });
             }
-        }
+        };
 
         /**
          * Remove this plugin off the element
          * This function should revert all changes which have been made by this plugin
          */
-        this.destroy = function(){
+        this.destroy = function () {
             $el.find('*').addBack().off('.' + PLUGIN_NAME);
             $el.removeData(PLUGIN_NAME);
             $el = null;
@@ -256,40 +268,39 @@
 
 
     // Register plugin on jQuery
-    $.fn[PLUGIN_NAME] = function(){
-        var args = arguments;
-        var $this = this;
-        var ret = $this;
+    $.fn[PLUGIN_NAME] = function () {
+        var args = arguments || [];
+        var val;
 
-        this.each(function(){
+        this.each(function () {
 
             // Prevent multiple instances for same element
             var instance = $.data(this, PLUGIN_NAME);
-            if (!instance){
-                instance = new Plugin(this, typeof args[0] == 'object' ? args[0] : {});
+            if (!instance) {
+                instance = new Plugin(this, typeof args[0] === 'object' ? args[0] : {});
                 $.data(this, PLUGIN_NAME, instance);
             }
 
             // Call public function
             // If it returns something, break the loop and return the value
-            if (typeof args[0] == 'string' && typeof instance[args[0]] == 'function'){
-                ret = instance[args[0]](args[1]);
-                return typeof ret != 'undefined' ? false : ret = $this;
+            if (typeof args[0] === 'string') {
+                if (typeof instance[args[0]] === 'function') {
+                    val = instance[args[0]](args[1]);
+                } else {
+                    $.error('Method "' + args[0] + '" does not exist for ' + PLUGIN_NAME + ' plugin');
+                }
             }
 
-            else {
-                $.error("Method '" + args[0] + "' doesn't exist for " + PLUGIN_NAME + " plugin");
-            }
-
+            return val === undefined;
         });
 
-        return ret;
+        return val === undefined ? this : val;
     };
 
 
     // Auto pilot
-    $(doc).on('ready ajaxStop DOMContentAdded', function(evt, nodes){
-        $(nodes || document).find('[data-' + PLUGIN_NAME + ']').addBack('[data-' + PLUGIN_NAME + ']')[PLUGIN_NAME]();
+    $(doc).on('ready ajaxStop DOMContentAdded', function (evt, nodes) {
+        $(nodes || doc).find('[data-' + PLUGIN_NAME + ']').addBack('[data-' + PLUGIN_NAME + ']')[PLUGIN_NAME]();
     });
 
 
