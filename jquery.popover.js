@@ -21,24 +21,25 @@
      * @type {{Object}}
      */
     var defOpts = {
-        tpl: '<div class="popover"><h6>__headline__</h6><p>__text__</p></div>', // selector, jQuery-Collection or HTML
+        // selector, jQuery-Collection or HTML
+        tpl: '<div class="popover"><h6>__headline__</h6><p>__text__</p></div>',
+
+        // can contain a URL (e.g. "https://...", "/path/file", "./relative/path")
+        // can contain a object to fill the template
+        // can contain HTML (will overwrite template)
         content: {
-            // - data to fill the template
-            // TODO ... jQuery-Collection, HTML or URL (in these cases the template will be obsolete)
             headline: 'This is a popover',
             text: 'This is the default text for a popover.'
         },
+
+        prepareContent: function(content){ return content },
         escapeContent: true,
+        selectHideTrigger: 'a', // selector for elements which will hide the popover
+        showOnClick: true,
         showOnHover: true,
         showOnHoverDelay: 1000,
         animSpeed: 100
     };
-
-    /**
-     * All instances
-     * @type {Array}
-     */
-    var instances = [];
 
     /**
      * Extended document
@@ -90,6 +91,7 @@
     }
 
 
+
     /**
      * Plugin constructor
      * @param {HTMLElement} el
@@ -138,6 +140,12 @@
          */
         var hideTimeout = 0;
 
+        /**
+         * Contains a running request
+         * @type {?jqXHR}
+         */
+        var runningRequest = null;
+
 
         /**
          * Init function for setting up this instance
@@ -154,13 +162,9 @@
             var attrOpts = attrOptStr ? $.parseJSON(attrOptStr) : {};
             opts = $.extend({}, defOpts, initOpts, attrOpts);
 
-            if ($.inArray(self, instances) < 0) {
-                instances.push(self);
-            }
-
             // add event handlers
-            $el
-                .on('click.' + PLUGIN_NAME, function (evt) {
+            if (opts.showOnClick){
+                $el.on('click.' + PLUGIN_NAME, function (evt) {
                     evt.preventDefault();
                     if ($popover && $popover.parent().length) {
                         self.hide();
@@ -168,8 +172,10 @@
                         self.show();
                         wasClicked = true;
                     }
-                })
-                .on('mouseenter.' + PLUGIN_NAME, function () {
+                });
+            }
+            if (opts.showOnHover){
+                $el.on('mouseenter.' + PLUGIN_NAME, function () {
                     clearTimeout(hideTimeout);
                     showTimeout = setTimeout(function () {
                         self.show();
@@ -183,79 +189,144 @@
                         }, opts.showOnHoverDelay);
                     }
                 });
+            }
         }
 
+        /**
+         * Loads content from remote source
+         * @param url
+         */
+        function loadRemoteContent(url, callback){
+            if (typeof callback != 'function'){
+                callback = $.noop;
+            }
+
+            // prevent double execution
+            if (runningRequest){
+                runningRequest.abort();
+            }
+
+            runningRequest = $.ajax({
+                type: 'GET',
+                url: url,
+                dataType: 'html json',
+                success: function(data){
+                    callback(data);
+                },
+                complete: function(){
+                    runningRequest = null;
+                }
+            });
+
+            return runningRequest;
+        }
 
         /**
-         * Show popover
+         * Builds the popover and adds it to the DOM
+         * @param content
          */
-        this.show = function () {
-            clearTimeout(showTimeout);
+        function buildPopover(content){
+            $popover = $(typeof content == 'object' ? replacePlaceholders(getTemplate(opts.tpl), content, opts.escapeContent) : content);
+            $popover.on('click.'+ PLUGIN_NAME, function(evt){
+                if (!$(evt.target).is(opts.selectHideTrigger)){
+                    debug.log('click event stopped at', evt.target);
+                    evt.stopPropagation();
+                }
+            });
 
-            // if no popover is present build new one
-            if (!$popover) {
-                $popover = $(replacePlaceholders(getTemplate(opts.tpl), opts.content))
-                    .on('click.' + PLUGIN_NAME, function (evt) {
-                        evt.stopPropagation();
-                    })
-                    .on('mouseenter.' + PLUGIN_NAME, function () {
+            if (opts.showOnHover){
+                $popover
+                    .on('mouseenter.'+ PLUGIN_NAME, function(evt){
+                        debug.log(evt.type +' triggered', evt);
                         clearTimeout(hideTimeout);
                     })
-                    .on('mouseleave.' + PLUGIN_NAME, function () {
-                        if (!wasClicked) {
+                    .on('mouseleave.'+ PLUGIN_NAME, function(evt){
+                        debug.log(evt.type +' triggered', evt);
+                        if (!wasClicked){
                             clearTimeout(showTimeout);
-                            hideTimeout = setTimeout(function () {
+                            hideTimeout = setTimeout(function(){
                                 self.hide();
                             }, opts.showOnHoverDelay);
                         }
                     });
             }
+        }
 
-            // hide other instances
-            $.each(instances, function (idx, instance) {
-                instance === self || instance.hide();
-            });
+        /**
+         * Show the popover
+         */
+        function showPopover(){
+            if (!$popover) return;
 
             // if popover is available and is not attached to the dom
             $popover.stop(true);
-            if (!$popover.parent().length) {
+            if (!$popover.parent().length){
                 $popover
                     .css({
                         opacity: 0,
                         position: 'absolute',
-                        left: $el.position().left + $el.outerWidth() / 2 + 'px',
-                        top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) + 'px'
+                        left: $el.position().left + $el.outerWidth()/2 +'px',
+                        top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) +'px'
                     })
                     .insertAfter($el)
-                    .css('margin-left', $popover.outerWidth() / 2 * -1 + 'px');
+                    .css('margin-left', $popover.outerWidth()/2*-1 +'px');
+                $doc.trigger('DOMContentAdded', $popover); // let other plugins bind their handlers
             }
             $popover.fadeTo(opts.animSpeed, 1);
 
-            // delay event binding, so the click event for showing does not trigger close immediately
-            setTimeout(function () {
-                $doc.one('click.' + PLUGIN_NAME, self.hide);
+            // delay event binding on document to prevent the first click event triggering close immediately
+            setTimeout(function(){
+                $doc.one('click.'+ PLUGIN_NAME, self.hide);
             }, 0);
+        }
+
+
+        /**
+         * Create popover, fetch contents and show it
+         */
+        this.show = function(){
+            clearTimeout(showTimeout);
+
+            // if no popover is present built new one
+            // (this should be only done on request and NOT on init)
+            if (!$popover){
+                // test if content is URL and fetch contents from remote
+                if (typeof opts.content == 'string' && opts.content.match(/^(https?:\/)?\.?\//)){
+                    loadRemoteContent(opts.content , function(content){
+                        buildPopover(opts.prepareContent(content));
+                        showPopover();
+                    });
+                } else {
+                    buildPopover(opts.prepareContent(opts.content));
+                    showPopover();
+                }
+
+            } else {
+                showPopover();
+            }
+
         };
 
         /**
-         * Hide flyout
+         * Hide popover
          */
         this.hide = function () {
             clearTimeout(hideTimeout);
-            $doc.off('click.' + PLUGIN_NAME, self.hide);
             wasClicked = false;
+            $doc.off('click.'+ PLUGIN_NAME, self.hide); // unbind only for this instance
             if ($popover) {
                 $popover.stop(true).fadeTo(opts.animSpeed, 0, function () {
                     $popover.detach();
                 });
             }
-        };
+        }
 
         /**
          * Remove this plugin off the element
          * This function should revert all changes which have been made by this plugin
          */
         this.destroy = function () {
+            $doc.off('.' + PLUGIN_NAME, self.hide); // unbind only for this instance
             $el.find('*').addBack().off('.' + PLUGIN_NAME);
             $el.removeData(PLUGIN_NAME);
             $el = null;
@@ -300,7 +371,7 @@
 
     // Auto pilot
     $(doc).on('ready ajaxStop DOMContentAdded', function (evt, nodes) {
-        $(nodes || doc).find('[data-' + PLUGIN_NAME + ']').addBack('[data-' + PLUGIN_NAME + ']')[PLUGIN_NAME]();
+        (nodes ? $(nodes) : $doc).find('[data-' + PLUGIN_NAME + ']').addBack('[data-' + PLUGIN_NAME + ']')[PLUGIN_NAME]();
     });
 
 
