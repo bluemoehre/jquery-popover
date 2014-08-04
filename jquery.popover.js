@@ -269,7 +269,7 @@
                         top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) +'px'
                     })
                     .insertAfter($el)
-                    .css('margin-left', $popover.outerWidth()/2*-1 +'px');
+                    .css('margin-left', $popover.width()/2*-1 +'px');
                 $doc.trigger('DOMContentAdded', $popover); // let other plugins bind their handlers
             }
             $popover.fadeTo(opts.animSpeed, 1);
