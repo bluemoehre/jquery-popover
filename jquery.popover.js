@@ -265,8 +265,8 @@
                     .css({
                         opacity: 0,
                         position: 'absolute',
-                        left: $el.position().left + $el.outerWidth()/2 +'px',
-                        top: $el.position().top + $el.outerHeight() + parseInt($el.css('margin-top')) +'px'
+                        left: $el.position().left + parseInt($el.css('margin-left')) + $el.outerWidth()/2 +'px',
+                        top: $el.position().top + + parseInt($el.css('margin-top')) + $el.outerHeight() +'px'
                     })
                     .insertAfter($el)
                     .css('margin-left', $popover.width()/2*-1 +'px');
