@@ -126,7 +126,7 @@
          * Was popover shown by a click?
          * @type {boolean}
          */
-        var wasClicked = false;
+        var explicitlyShown = false;
 
         /**
          * Mouse hover delay timer
@@ -169,8 +169,8 @@
                     if ($popover && $popover.parent().length) {
                         self.hide();
                     } else {
-                        self.show();
-                        wasClicked = true;
+                        show();
+                        explicitlyShown = true;
                     }
                 });
             }
@@ -178,12 +178,11 @@
                 $el.on('mouseenter.' + PLUGIN_NAME, function () {
                     clearTimeout(hideTimeout);
                     showTimeout = setTimeout(function () {
-                        self.show();
+                        show();
                     }, opts.showOnHoverDelay);
-                })
-                .on('mouseleave.' + PLUGIN_NAME, function () {
+                }).on('mouseleave.' + PLUGIN_NAME, function () {
                     clearTimeout(showTimeout);
-                    if (!wasClicked) {
+                    if (!explicitlyShown) {
                         hideTimeout = setTimeout(function () {
                             self.hide();
                         }, opts.showOnHoverDelay);
@@ -242,7 +241,7 @@
                     })
                     .on('mouseleave.'+ PLUGIN_NAME, function(evt){
                         debug.log(evt.type +' triggered', evt);
-                        if (!wasClicked){
+                        if (!explicitlyShown){
                             clearTimeout(showTimeout);
                             hideTimeout = setTimeout(function(){
                                 self.hide();
@@ -256,8 +255,6 @@
          * Show the popover
          */
         function showPopover(){
-            if (!$popover) return;
-
             // if popover is available and is not attached to the dom
             $popover.stop(true);
             if (!$popover.parent().length){
@@ -269,7 +266,7 @@
                         top: $el.position().top + + parseInt($el.css('margin-top')) + $el.outerHeight() +'px'
                     })
                     .insertAfter($el)
-                    .css('margin-left', $popover.width()/2*-1 +'px');
+                    .css('margin-left', $popover.outerWidth()/2*-1 +'px');
                 $doc.trigger('DOMContentAdded', $popover); // let other plugins bind their handlers
             }
             $popover.fadeTo(opts.animSpeed, 1);
@@ -280,13 +277,10 @@
             }, 0);
         }
 
-
         /**
          * Create popover, fetch contents and show it
          */
-        this.show = function(){
-            clearTimeout(showTimeout);
-
+        function show(){
             // if no popover is present built new one
             // (this should be only done on request and NOT on init)
             if (!$popover){
@@ -304,7 +298,17 @@
             } else {
                 showPopover();
             }
+        }
 
+
+        /**
+         * Public wrapper for internal show()
+         */
+        this.show = function(){
+            debug.log('show() called');
+            clearTimeout(showTimeout);
+            explicitlyShown = true;
+            show();
         };
 
         /**
@@ -312,7 +316,7 @@
          */
         this.hide = function () {
             clearTimeout(hideTimeout);
-            wasClicked = false;
+            explicitlyShown = false;
             $doc.off('click.'+ PLUGIN_NAME, self.hide); // unbind only for this instance
             if ($popover) {
                 $popover.stop(true).fadeTo(opts.animSpeed, 0, function () {
